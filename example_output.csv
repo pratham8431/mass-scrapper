@@ -1,0 +1,6 @@
+channel_id,channel_title,description,subscriber_count,view_count,video_count,published_at,category,city,country,niche,engagement_rate,search_query,scraped_at
+UC1234567890,Tech Guru Mumbai,Latest tech reviews tutorials and gadget comparisons from Mumbai India,125000,25000000,450,2020-01-15T10:30:00Z,Technology & Gadgets,Mumbai,India,tech,5.2,Mumbai tech,2024-01-15T14:30:00
+UC9876543210,Beauty Tips Delhi,Makeup tutorials skincare routines and beauty hacks from Delhi,89000,18000000,320,2019-08-22T15:45:00Z,Beauty & Cosmetics,Delhi,India,beauty,4.8,Delhi beauty,2024-01-15T14:31:00
+UC5556667777,Gaming Pro LA,Epic gaming content esports highlights and live streams from Los Angeles,210000,45000000,780,2018-12-10T09:15:00Z,Gaming & Esports,Los Angeles,USA,gaming,6.1,Los Angeles gaming,2024-01-15T14:32:00
+UC1112223333,Fitness Coach London,Workout routines nutrition tips and wellness advice from London,156000,32000000,520,2020-03-05T14:20:00Z,Fitness & Health,London,UK,fitness,5.5,London fitness,2024-01-15T14:33:00
+UC4445556666,Food Master Tokyo,Authentic Japanese recipes cooking tutorials and food reviews from Tokyo,98000,22000000,410,2019-11-18T11:30:00Z,Food & Cooking,Tokyo,Japan,food,4.9,Tokyo food,2024-01-15T14:34:00 
