@@ -20,6 +20,7 @@ from config import YOUTUBE_API_KEYS, SCRAPING_CONFIG, OUTPUT_CONFIG, LOGGING_CON
 scraper_instance = None
 current_influencers = []
 is_running = False
+resume_data = []  # Data loaded from checkpoint for resume
 
 def signal_handler(signum, frame):
     """Handle interrupt signals to save data before exit"""
@@ -257,7 +258,7 @@ def calculate_engagement_rate(stats: Dict[str, Any]) -> float:
         return 5.0
 
 def scrape_influencers_batch(scraper: YouTubeInfluencerScraper, category: str, city: str, 
-                           max_results: int = 50, min_subscribers: int = 1000):
+                           max_results: int = 50, min_subscribers: int = 1000, existing_influencers: List[Dict] = None):
     """Scrape a batch of influencers for a specific category and city"""
     logger = logging.getLogger(__name__)
     logger.info(f"🔍 Scraping {category} influencers in {city}...")
@@ -283,11 +284,23 @@ def scrape_influencers_batch(scraper: YouTubeInfluencerScraper, category: str, c
                 if subscriber_count < min_subscribers:
                     continue
                 
+                # Check for duplicates by channel_id if existing_influencers provided
+                channel_id = channel['channelId']
+                if existing_influencers:
+                    is_duplicate = any(
+                        existing.get('channel_id') == channel_id 
+                        for existing in existing_influencers
+                    )
+                    
+                    if is_duplicate:
+                        logger.info(f"   ⚠️  Skipped duplicate: {stats['channelTitle']} (already exists)")
+                        continue
+                
                 # Truncate description if too long
                 description = stats.get('description', '')[:OUTPUT_CONFIG['max_description_length']]
                 
                 influencer = {
-                    'channel_id': channel['channelId'],
+                    'channel_id': channel_id,
                     'channel_title': stats['channelTitle'],
                     'description': description,
                     'subscriber_count': subscriber_count,
@@ -304,7 +317,7 @@ def scrape_influencers_batch(scraper: YouTubeInfluencerScraper, category: str, c
                 }
                 
                 influencers.append(influencer)
-                logger.info(f"   ✅ Added: {influencer['channel_title']} ({influencer['subscriber_count']:,} subscribers)")
+                logger.info(f"   ✅ Added: {influencer['channel_title']} ({influencer['channel_id']}) ({influencer['subscriber_count']:,} subscribers)")
                 
                 # Rate limiting
                 time.sleep(SCRAPING_CONFIG['rate_limit_delay'])
@@ -417,12 +430,36 @@ def mass_scrape_10k(api_keys: List[str], target_count: int = 10000, max_per_sear
         configs = create_mass_search_configs()
         logger.info(f"📋 Found {len(configs)} category-city combinations")
         
-        all_influencers = []
+        # Start with existing data if resuming, otherwise start fresh
+        all_influencers = resume_data.copy() if resume_data else []
         current_influencers = all_influencers  # Store globally for signal handling
+        
+        if resume_data:
+            logger.info(f"🔄 Resuming with {len(all_influencers)} existing influencers")
+            logger.info(f"📊 Target: {len(all_influencers)} + {target_count - len(all_influencers)} = {target_count} total")
+            # Calculate how many searches were already completed
+            estimated_completed_searches = len(all_influencers) // 50  # Rough estimate
+            logger.info(f"🔄 Estimated searches completed: ~{estimated_completed_searches}")
+        
         total_searches = 0
         start_time = datetime.now()
         
-        for config in configs:
+        # Track progress for resume functionality with better completion detection
+        completed_searches = set()
+        search_results = {}  # Track how many unique results each search produced
+        
+        if resume_data:
+            # Create a set of completed search combinations
+            for influencer in resume_data:
+                search_key = f"{influencer.get('category', 'unknown')}_{influencer.get('city', 'unknown')}"
+                completed_searches.add(search_key)
+            logger.info(f"🔄 Detected {len(completed_searches)} completed search combinations")
+        
+        # Process categories in reverse order to start with fresh, less-explored categories
+        reversed_configs = list(reversed(configs))
+        logger.info(f"🔄 Processing categories in REVERSE order to find fresh influencers")
+        
+        for config in reversed_configs:
             category = config['category']
             cities = config['cities']
             
@@ -433,15 +470,46 @@ def mass_scrape_10k(api_keys: List[str], target_count: int = 10000, max_per_sear
                 if len(all_influencers) >= target_count:
                     break
                 
+                # Check if this search combination was already completed
+                search_key = f"{category}_{city}"
+                if search_key in completed_searches:
+                    logger.info(f"   ⏭️  Skipping {city} {category} (already completed)")
+                    continue
+                
                 total_searches += 1
-                batch = scrape_influencers_batch(scraper, category, city, max_per_search, SCRAPING_CONFIG['min_subscribers'])
+                batch = scrape_influencers_batch(scraper, category, city, max_per_search, SCRAPING_CONFIG['min_subscribers'], all_influencers)
+                
+                # Track how many unique results this search produced
+                unique_count = len([b for b in batch if b.get('channel_id') not in [existing.get('channel_id') for existing in all_influencers]])
+                search_results[search_key] = unique_count
+                
+                # If no new unique results, mark this search as completed
+                if unique_count == 0:
+                    logger.info(f"   ⏭️  Marking search as completed (no new results): {city} {category}")
+                    completed_searches.add(search_key)
+                elif unique_count < 5:  # If very few new results, also mark as completed
+                    logger.info(f"   ⚠️  Low yield search: {city} {category} (only {unique_count} new results)")
+                    completed_searches.add(search_key)
+                
+                # Additional check: if we're getting too many duplicates in a row, skip this category
+                duplicate_ratio = (len(batch) - unique_count) / len(batch) if batch else 0
+                if duplicate_ratio > 0.8:  # If more than 80% are duplicates
+                    logger.info(f"   🚨 High duplicate ratio ({duplicate_ratio:.1%}), marking category {category} as completed")
+                    # Mark all remaining cities in this category as completed
+                    for remaining_city in cities[cities.index(city):]:
+                        completed_searches.add(f"{category}_{remaining_city}")
+                    break  # Move to next category
+                
                 all_influencers.extend(batch)
                 
                 # Show progress
                 elapsed_time = datetime.now() - start_time
                 rate = len(all_influencers) / (elapsed_time.total_seconds() / 3600) if elapsed_time.total_seconds() > 0 else 0
                 
-                logger.info(f"   📊 Progress: {len(all_influencers)}/{target_count} influencers collected")
+                if resume_data:
+                    logger.info(f"   📊 Progress: {len(all_influencers)}/{target_count} influencers collected (resumed from {len(resume_data)})")
+                else:
+                    logger.info(f"   📊 Progress: {len(all_influencers)}/{target_count} influencers collected")
                 logger.info(f"   🔍 Searches completed: {total_searches}")
                 logger.info(f"   ⏱️  Rate: {rate:.1f} influencers/hour")
                 
@@ -480,7 +548,11 @@ def mass_scrape_10k(api_keys: List[str], target_count: int = 10000, max_per_sear
         total_time = datetime.now() - start_time
         logger.info(f"\n🎉 Mass Scraping Complete!")
         logger.info(f"📊 Final Statistics:")
-        logger.info(f"   • Total influencers collected: {len(all_influencers)}")
+        if resume_data:
+            new_collected = len(all_influencers) - len(resume_data)
+            logger.info(f"   • Total influencers: {len(all_influencers)} (resumed: {len(resume_data)}, new: {new_collected})")
+        else:
+            logger.info(f"   • Total influencers collected: {len(all_influencers)}")
         logger.info(f"   • Total searches performed: {total_searches}")
         logger.info(f"   • Total time: {total_time}")
         logger.info(f"   • Average rate: {len(all_influencers) / (total_time.total_seconds() / 3600):.1f} influencers/hour")
@@ -520,11 +592,15 @@ def main():
             checkpoint_data = load_checkpoint_data(checkpoint_file)
             if checkpoint_data:
                 logger.info(f"✅ Loaded {len(checkpoint_data)} influencers from checkpoint")
-                # Continue with existing data
-                # TODO: Implement resume logic
-                logger.info("⚠️  Resume functionality coming soon. Starting fresh for now.")
+                # Store checkpoint data for resume
+                global resume_data
+                resume_data = checkpoint_data
+                logger.info(f"🔄 Will resume with {len(checkpoint_data)} existing influencers")
             else:
                 logger.warning("⚠️  Failed to load checkpoint. Starting fresh.")
+                resume_data = []
+        else:
+            resume_data = []
     
     # Check if API keys are configured
     if not YOUTUBE_API_KEYS or YOUTUBE_API_KEYS[0] == "YOUR_API_KEY_1_HERE":

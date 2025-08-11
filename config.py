@@ -4,7 +4,7 @@ Configuration file for YouTube Mass Scraper
 Contains API keys and other configuration settings
 """
 
-# YouTube Data API v3 Keys (8 keys for rotation - more to be added)
+# YouTube Data API v3 Keys (11 keys for rotation - more to be added)
 YOUTUBE_API_KEYS = [
     "AIzaSyBfREMaYjzB4AhcK2fBB71Cvaus_Bdk_fI",
     "AIzaSyBIwv_WRhG8m3W7eHuw8P7AzlE7-ae-GjU",
@@ -13,7 +13,10 @@ YOUTUBE_API_KEYS = [
     "AIzaSyAj9FMuwvX1hkoEgXe7teB1Oc_rfOx4hns",
     "AIzaSyCIhkWEOERFmckDU7LPqEsgZ-lR3cS2IEQ",
     "AIzaSyCbWxVPqv7TndHu0X7X4ilQ9lA3J9sqW3g",
-    "AIzaSyA81Goc4p4CqAgNqkVi5tKietF2NQ1I6IY"
+    "AIzaSyA81Goc4p4CqAgNqkVi5tKietF2NQ1I6IY",
+    "AIzaSyCOCen7SCppQrcM1eEVblOb3kFAjrBox00",
+    "AIzaSyAUjQGXfDQeQsI0YbeQQIeYNJ4oPSKPc1c",
+    "AIzaSyAfDW0Q3NyMq9osQXzlZwxZfzqrJRYHcE8"
 ]
 
 # Scraping Configuration
