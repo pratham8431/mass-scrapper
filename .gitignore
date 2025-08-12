@@ -1,0 +1,33 @@
+# Data files
+output/*.csv
+output/checkpoint_*_influencers.csv
+output/emergency_*_influencers.csv
+output/backup_*_influencers.csv
+
+# Log files
+*.log
+youtube_scraper.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp 
